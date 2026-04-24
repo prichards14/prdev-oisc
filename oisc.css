@@ -531,7 +531,7 @@ input[type=range] {
   cursor: pointer;
   transition: background 0.07s, color 0.07s;
   letter-spacing: 0;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .mc:hover { background: #142018; color: var(--text); }
