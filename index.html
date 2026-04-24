@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <title>SUBLEQ OISC Simulator</title>
+  <link rel="stylesheet" href="oisc.css"/>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Header ────────────────────────────── -->
+  <header>
+    <div>
+      <div class="hdr-title">SUBLEQ · OISC</div>
+    </div>
+    <div class="hdr-sub">ONE INSTRUCTION SET COMPUTER &mdash; mem[B] &minus;= mem[A]; if mem[B] &le; 0 goto C</div>
+    <div class="hdr-status" id="status">INITIALIZING…</div>
+  </header>
+
+  <!-- ── Main grid ─────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- ══ LEFT COLUMN ══════════════════════ -->
+    <div class="left-col">
+
+      <!-- 1. Settings & Controls -->
+      <div class="panel">
+        <div class="panel-label">Settings &amp; Controls</div>
+
+        <div class="ctrl-block">
+          <select class="prog-select" id="prog-sel" onchange="loadProgram(this.value)"></select>
+        </div>
+
+        <div class="ctrl-block">
+          <button class="btn" title="New empty program" onclick="newProgram()">+ NEW</button>
+          <button class="btn" title="Duplicate" onclick="duplicateProgram()">⧉ DUP</button>
+          <button class="btn" title="Edit program" onclick="openEditor(prog)">✎ EDIT</button>
+          <button class="btn danger-btn" id="del-btn" title="Delete" onclick="deleteProgram()">✕ DEL</button>
+        </div>
+
+        <div class="ctrl-block">
+          <button class="btn" onclick="stepCPU()">STEP</button>
+          <button class="btn" id="run-btn" onclick="toggleRun()">RUN</button>
+          <button class="btn" onclick="resetCPU()">RESET</button>
+        </div>
+
+        <div class="speed-row">
+          <span>SPEED</span>
+          <input type="range" min="1" max="10" value="4" step="1" id="speed-sl"
+                 oninput="updateSpeed(this.value)" style="width:80px"/>
+          <span id="speed-lbl">4 steps/s</span>
+        </div>
+      </div>
+
+      <!-- 2. Output Port -->
+      <div class="panel">
+        <div class="panel-label">Output Port &mdash; addr FF</div>
+        <div class="bit-labels">
+          <div class="bit-label">7</div><div class="bit-label">6</div>
+          <div class="bit-label">5</div><div class="bit-label">4</div>
+          <div class="bit-label">3</div><div class="bit-label">2</div>
+          <div class="bit-label">1</div><div class="bit-label">0</div>
+        </div>
+        <div class="led-row">
+          <div class="led off" id="ol7"></div>
+          <div class="led off" id="ol6"></div>
+          <div class="led off" id="ol5"></div>
+          <div class="led off" id="ol4"></div>
+          <div class="led off" id="ol3"></div>
+          <div class="led off" id="ol2"></div>
+          <div class="led off" id="ol1"></div>
+          <div class="led off" id="ol0"></div>
+          <span class="hex-val" id="out-hex">0x00 = 0</span>
+        </div>
+        <div class="out-trace" id="out-trace"></div>
+      </div>
+
+      <!-- 3. Input Port -->
+      <div class="panel">
+        <div class="panel-label">Input Port &mdash; addr FE (toggle switches)</div>
+        <div class="bit-labels">
+          <div class="bit-label">7</div><div class="bit-label">6</div>
+          <div class="bit-label">5</div><div class="bit-label">4</div>
+          <div class="bit-label">3</div><div class="bit-label">2</div>
+          <div class="bit-label">1</div><div class="bit-label">0</div>
+        </div>
+        <div class="switch-row">
+          <div class="sw off" id="sw7" onclick="toggleSw(7)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw6" onclick="toggleSw(6)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw5" onclick="toggleSw(5)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw4" onclick="toggleSw(4)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw3" onclick="toggleSw(3)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw2" onclick="toggleSw(2)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw1" onclick="toggleSw(1)"><div class="sw-knob"></div></div>
+          <div class="sw off" id="sw0" onclick="toggleSw(0)"><div class="sw-knob"></div></div>
+          <span class="hex-val" id="in-hex">0x00</span>
+        </div>
+      </div>
+
+      <!-- 4. Assembly Listing -->
+      <div class="panel grow">
+        <div class="panel-label">Assembly Listing</div>
+        <div class="asm-list" id="asm-list"></div>
+        <div class="section-title">Current Instruction</div>
+        <div class="instr-decode" id="cur-instr">&mdash;</div>
+      </div>
+
+    </div><!-- /left-col -->
+
+    <!-- ══ RIGHT COLUMN ═════════════════════ -->
+    <div class="right-col">
+
+      <!-- 1. Memory -->
+      <div class="panel grow">
+        <div class="panel-label">Memory &mdash; 256 bytes · click cell to inspect</div>
+
+        <div class="mem-legend">
+          <span><span class="lsw" style="background:rgba(140,60,220,0.5)"></span>PC</span>
+          <span><span class="lsw" style="background:var(--blue-dim);border:1px solid var(--blue)"></span>A operand</span>
+          <span><span class="lsw" style="background:var(--green-dim);border:1px solid var(--green)"></span>B operand</span>
+          <span><span class="lsw" style="background:var(--orange-dim);border:1px solid var(--orange)"></span>C operand</span>
+        </div>
+
+        <div class="mem-grid" id="mem-grid"></div>
+
+        <div class="mem-inspect" id="mem-inspect">Click a cell to inspect</div>
+      </div>
+
+      <!-- 2. Registers -->
+      <div class="panel">
+        <div class="panel-label">CPU Registers</div>
+
+        <div class="reg-grid">
+          <div class="reg-box reg-pc">
+            <div class="reg-name">PC</div>
+            <div class="reg-val" id="r-pc">0x00</div>
+            <div class="reg-sub" id="r-pc-d">dec 0</div>
+          </div>
+          <div class="reg-box reg-a">
+            <div class="reg-name">A — SRC</div>
+            <div class="reg-val" id="r-a">&mdash;</div>
+            <div class="reg-sub" id="r-av">&mdash;</div>
+          </div>
+          <div class="reg-box reg-b">
+            <div class="reg-name">B — DST</div>
+            <div class="reg-val" id="r-b">&mdash;</div>
+            <div class="reg-sub" id="r-bv">&mdash;</div>
+          </div>
+          <div class="reg-box reg-c">
+            <div class="reg-name">C — JMP</div>
+            <div class="reg-val" id="r-c">&mdash;</div>
+            <div class="reg-sub" id="r-cv">&mdash;</div>
+          </div>
+          <div class="reg-box">
+            <div class="reg-name">RESULT</div>
+            <div class="reg-val" id="r-res">&mdash;</div>
+            <div class="reg-sub" id="r-res2">&mdash;</div>
+          </div>
+          <div class="reg-box">
+            <div class="reg-name">CYCLES</div>
+            <div class="reg-val" id="r-cyc">0</div>
+            <div class="reg-sub">&nbsp;</div>
+          </div>
+        </div>
+
+        <div class="flag-row">
+          <div class="flag" id="f-n">N=0</div>
+          <div class="flag" id="f-z">Z=0</div>
+          <div class="flag" id="f-br">BRANCH: NO</div>
+        </div>
+
+        <div class="instr-decode" id="instr-decode">
+          <span class="kw">SUBLEQ</span> <span class="ka">A</span>, <span class="kb">B</span>, <span class="kc">C</span> &nbsp;&mdash;&nbsp; mem[B] = mem[B] &minus; mem[A] &nbsp;&mdash;&nbsp; if result &le; 0 &rarr; jump to C
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+
+  </div><!-- /main-grid -->
+</div><!-- /app -->
+
+<!-- ── Program editor modal ───────────────── -->
+<div id="prog-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-title">EDIT PROGRAM</div>
+
+    <div style="margin-bottom:12px">
+      <div class="modal-section">Program Name</div>
+      <input class="name-inp" id="edit-name" type="text" placeholder="My Program" maxlength="60"/>
+    </div>
+
+    <div class="modal-section modal-sep">Instructions &mdash; SUBLEQ A, B, C (hex bytes 00–FF)</div>
+    <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-bottom:6px">
+      Each row is one instruction at the listed address. B=FF writes to output; A=FE reads from input switches.
+    </div>
+    <table class="edit-table" id="instr-table">
+      <thead><tr>
+        <th>ADDR</th><th>A</th><th>B</th><th>C</th>
+        <th style="width:100%">EFFECT</th><th></th>
+      </tr></thead>
+      <tbody id="instr-tbody"></tbody>
+    </table>
+    <button class="add-row-btn" onclick="addInstrRow()">+ ADD INSTRUCTION</button>
+
+    <div class="modal-section modal-sep" style="margin-top:16px">Memory Constants &mdash; data values at fixed addresses</div>
+    <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-bottom:6px">
+      Addresses used by instructions as operand data (counter value, constant 1, etc.)
+    </div>
+    <table class="edit-table" id="const-table">
+      <thead><tr>
+        <th>ADDR</th><th>VALUE</th><th style="width:100%">DECIMAL</th><th></th>
+      </tr></thead>
+      <tbody id="const-tbody"></tbody>
+    </table>
+    <button class="add-row-btn" onclick="addConstRow()">+ ADD CONSTANT</button>
+
+    <div id="edit-error" class="error-msg"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditor()">CANCEL</button>
+      <button class="btn primary-btn" onclick="saveEditor()">SAVE PROGRAM</button>
+    </div>
+  </div>
+</div>
+
+<script src="oisc.js"></script>
+</body>
+</html>
